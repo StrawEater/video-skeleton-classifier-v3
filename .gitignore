@@ -1,0 +1,9 @@
+/checkpoints
+/pre_trained_models
+**/__pycache__/*
+dataset_scripts
+old
+.vscode
+label_split
+VideoMamba/*
+VideoMamba

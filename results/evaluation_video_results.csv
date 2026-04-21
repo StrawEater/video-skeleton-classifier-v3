@@ -1,0 +1,4 @@
+model_name,checkpoint,num_samples,loss,top1_accuracy,top5_accuracy,clip_len,size
+video_8f_medium_pretrained_2e-4_0.01,epoch14_top1_91.33_top1V_70.92.pth,105,1.435129491204307,58.095238095238095,98.0952380952381,8,medium
+video_8f_tiny_pretrained_2e-4_0.01,epoch19_top1_97.18_top1V_69.64.pth,105,1.2577875300532295,56.19047619047619,98.0952380952381,8,tiny
+video_8f_small_pretrained_2e-4_0.01,epoch31_top1_99.19_top1V_72.07.pth,105,1.951001501863911,48.57142857142857,98.0952380952381,8,small

@@ -1,0 +1,4 @@
+model_name,checkpoint,num_samples,loss,top1_accuracy,top5_accuracy,clip_len,size
+skeleton_small_8f_2e-4_0.05,epoch29_top1_52.08_top1V_26.66.pth,105,2.2526587917691185,32.380952562604634,73.33333369663784,8,small
+skeleton_tiny_8f_2e-4_0.05,epoch19_top1_31.25_top1V_24.62.pth,105,2.509440531049456,26.666666884649366,63.80952388218471,8,tiny
+skeleton_medium_8f_2e-4_0.05,epoch4_top1_15.52_top1V_22.83.pth,105,3.1616630826677596,8.571428571428571,37.142857233683266,8,medium

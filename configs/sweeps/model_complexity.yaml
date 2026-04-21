@@ -1,0 +1,22 @@
+# Model complexity sweep for multimodal fusion (OakInk2).
+# Covers model size × fusion depth × fusion strategy.
+#
+# Usage: python train.py configs/sweeps/model_complexity.yaml
+#
+# Produces 3 × 2 × 4 = 24 experiments.
+
+sweep:
+  base: configs/oakink2_multimodal.yaml
+  grid:
+    model.size:
+      tiny:   tiny
+      small:  small
+      medium: medium
+    model.fusion_depth:
+      fd1: 1
+      fd4: 4
+    model.fusion_strategy:
+      weighted: weighted
+      context:  context
+      new:      new
+      average:  average

@@ -1,0 +1,27 @@
+base: base.yaml
+
+experiment:
+  name: oakink2_video_tiny
+  modality: video
+
+dataset:
+  name: oakink2
+  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_train.txt
+  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_val.txt
+  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_test.txt
+  frames_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/scenes
+
+  num_classes: 306
+  clip_len: 8
+  with_jitter: true
+  max_train_samples: null
+
+model:
+  size: tiny        # tiny | small | medium
+  pretrained: false
+  pretrained_path: null   # null = auto-resolve from pretrained_dir
+
+training:
+  total_epochs: 200
+  learning_rate: 2.0e-4
+  weight_decay: 0.01

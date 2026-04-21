@@ -1,0 +1,31 @@
+git clone https://github.com/OpenGVLab/VideoMamba
+cd VideoMamba
+
+conda create -n mamba python=3.10
+conda activate mamba
+
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+
+Modificar tanto en mamba como causal-conv1d setup
+    cc_flag.append("arch=compute_90,code=sm_90")
+por
+    cc_flag.append("arch=compute_120,code=sm_120")
+
+cd VideoMamba
+
+cd causal-conv1d
+set CAUSAL_CONV1D_FORCE_BUILD=TRUE //Tal vez opcional
+pip install -e . --no-build-isolation
+cd ..
+
+cd mamba
+set MAMBA_FORCE_BUILD=TRUE //Tal vez opcional
+pip install -e . --no-build-isolation
+cd ..
+
+En requirements.txt:
+Comentar apex==0.1 // solo se usa para entrenamiento distribuido
+Cambiar skimage==0.0 por scikit-image // Cambio de nombre el modulo
+Comentar xformers==0.0.24 // Opcional, puede traer problemas con la version de pytorch
+Comentar av==11.0.0 // It has no binary wheel; install the latest available binary before requirements.txt
+pip install av --only-binary av
