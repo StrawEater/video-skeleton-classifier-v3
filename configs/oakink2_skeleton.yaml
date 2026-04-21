@@ -21,6 +21,7 @@ dataset:
   # Cap training set size for data-efficiency experiments.
   # null = use all available samples.
   max_train_samples: null
+  min_class_samples: null   # e.g. 5 — drops classes with fewer total segments
 
 model:
   size: tiny      # tiny | small | medium

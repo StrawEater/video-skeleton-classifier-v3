@@ -2,8 +2,24 @@ import os
 import random
 
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torchvision import transforms
+
+
+class _LabelRemapDataset(Dataset):
+    """Wraps a dataset and remaps non-contiguous label IDs to [0, N)."""
+    def __init__(self, ds, label_map: dict):
+        self.ds = ds
+        self.label_map = label_map
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        sample = self.ds[idx]
+        # sample is (video, label) or (skeleton, label) or (video, skeleton, label)
+        *inputs, label = sample
+        return (*inputs, self.label_map[int(label)])
 
 # ---------------------------------------------------------------------------
 # Video transform (shared across modalities)
@@ -230,6 +246,22 @@ def build_dataset(cfg, split):
 
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
+    min_class_samples = d.get('min_class_samples', None)
+    if min_class_samples:
+        from pathlib import Path
+        import pandas as pd
+        segments_path = Path(split_path).parent.parent / 'action_segments.txt'
+        if segments_path.exists():
+            counts = pd.read_csv(segments_path, sep='\t')['label_id'].value_counts()
+        else:
+            counts = ds.df['label_id'].value_counts()
+        valid_labels = sorted(counts[counts >= min_class_samples].index)
+        valid_set = set(valid_labels)
+        label_map = {orig: new for new, orig in enumerate(valid_labels)}
+        keep = [i for i, lid in enumerate(ds.df['label_id']) if lid in valid_set]
+        ds = _LabelRemapDataset(Subset(ds, keep), label_map)
+        print(f"[min_class_samples={min_class_samples}] {split}: {len(keep)} samples, {len(valid_labels)} classes")
 
     if training:
         ds = _subset(ds, d.get('max_train_samples'))

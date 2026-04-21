@@ -19,6 +19,7 @@ dataset:
   normalize_skeleton: true
   with_jitter: true
   max_train_samples: null
+  min_class_samples: null   # e.g. 5 — drops classes with fewer total segments
 
 model:
   size: tiny          # tiny | small | medium (applies to both video and skeleton encoders)
