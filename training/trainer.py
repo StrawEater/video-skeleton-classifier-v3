@@ -94,8 +94,9 @@ class Trainer:
         warmup_epochs = max(1, int(self.total_epochs * self.warmup_fraction))
         warmup_steps = steps_per_epoch * warmup_epochs
         cosine_steps = steps_per_epoch * (self.total_epochs - warmup_epochs)
+        t_max_mult = t.get('cosine_t_max_multiplier', 1.0)
         warmup_sched = LinearLR(self.optimizer, start_factor=0.1, total_iters=warmup_steps)
-        cosine_sched = CosineAnnealingLR(self.optimizer, T_max=cosine_steps, eta_min=1e-6)
+        cosine_sched = CosineAnnealingLR(self.optimizer, T_max=int(cosine_steps * t_max_mult), eta_min=1e-6)
         self.scheduler = SequentialLR(
             self.optimizer,
             schedulers=[warmup_sched, cosine_sched],
