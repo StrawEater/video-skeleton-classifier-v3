@@ -12,7 +12,7 @@ import json
 import pandas as pd
 from pathlib import Path
 
-DEFAULT_ROOT = Path("/data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2")
+DEFAULT_ROOT = Path("/home/juani/OakInkV2_jpeg")
 
 
 def main():

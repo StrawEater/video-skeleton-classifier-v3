@@ -6,14 +6,14 @@ experiment:
 
 dataset:
   name: oakink2
-  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_train.txt
-  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_val.txt
-  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_test.txt
-  keypoints_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/hand_keypoints
+  train_split: /home/juani/OakInkV2_jpeg/label_split/action_train.txt
+  val_split:   /home/juani/OakInkV2_jpeg/label_split/action_val.txt
+  test_split:  /home/juani/OakInkV2_jpeg/label_split/action_test.txt
+  keypoints_root: /home/juani/OakInkV2_jpeg/hand_keypoints
 
-  num_classes: 68       # 68 unique actions (object tag removed)
+  num_classes: 32       # 68 unique actions (object tag removed)
   action_only: true
-  min_class_samples: null   # e.g. 11 → 36 classes, median=18 (same as H2O)
+  min_class_samples: 25   # e.g. 11 → 36 classes, median=18 (same as H2O)
   weighted_sampling: true
 
   clip_len: 8
@@ -30,5 +30,5 @@ model:
 
 training:
   total_epochs: 200
-  learning_rate: 2.0e-4
+  learning_rate: 1.0e-3
   weight_decay: 0.05

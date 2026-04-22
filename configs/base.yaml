@@ -20,10 +20,10 @@ training:
   grad_clip: 1.0
 
   # Learning-rate patience: reduce LR by lr_factor after this many epochs without val improvement
-  lr_patience: 5
-  lr_factor: 0.1
+  lr_patience: 10
+  lr_factor: 0.5
   # Stop training after this many epochs without val improvement
-  stop_patience: 10
+  stop_patience: 25
 
   # Skip experiment if checkpoint_dir already exists (useful for grid searches)
   skip_if_exists: true

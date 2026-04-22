@@ -1,0 +1,27 @@
+# Data size vs model complexity sweep for skeleton modality.
+#
+# Usage: python train.py configs/sweeps/datasize_skeleton.yaml
+#
+# Produces 4 × 3 = 12 experiments named, e.g.:
+#   oakink2_skeleton_tiny__100__tiny
+#   oakink2_skeleton_tiny__full__medium
+#
+# Each grid key uses {label: value} syntax so experiment names stay readable.
+
+sweep:
+  base: configs/oakink2_action_only_skeleton.yaml
+  grid:
+    training.learning_rate:
+      lr-1e-3:   1.0e-3
+      lr-5e-4:   5.0e-4
+      lr-2e-4:   2.0e-4
+      
+    training.lr_patience:
+      lr_factor_80:   0.8
+      lr_factor_50:   0.5
+      lr_factor_10:   0.1
+
+    training.cosine_t_max_multiplier:
+      t_max_1:   1
+      t_max_2:   2
+      t_max_3:   3

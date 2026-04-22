@@ -5,5 +5,3 @@ dataset_scripts
 old
 .vscode
 label_split
-VideoMamba/*
-VideoMamba
