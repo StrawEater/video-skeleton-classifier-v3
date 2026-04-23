@@ -4,7 +4,7 @@ cd VideoMamba
 conda create -n mamba python=3.10
 conda activate mamba
 
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu...
 
 Modificar tanto en mamba como causal-conv1d setup
     cc_flag.append("arch=compute_90,code=sm_90")
