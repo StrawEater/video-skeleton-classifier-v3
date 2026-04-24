@@ -14,8 +14,8 @@ from torch.profiler import ProfilerActivity, profile, record_function
 try:
     from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput
 except ImportError:
-    from transformers.generation import GenerateGreedyOutput as GreedySearchDecoderOnlyOutput
-    from transformers.generation import GenerateSampleOutput as SampleDecoderOnlyOutput
+    from transformers.generation import GenerateEncoderDecoderOutput as GreedySearchDecoderOnlyOutput
+    from transformers.generation import GenerateDecoderOnlyOutput as SampleDecoderOnlyOutput
 
 
 @dataclass
