@@ -184,6 +184,7 @@ def build_dataset(cfg, split):
                 normalize_skeleton=normalize,
                 with_jitter=jitter,
                 training=training,
+                wrist_positions_root=d.get('wrist_positions_root'),
             )
         elif modality == 'video':
             ds = OakInkVideoDataset(
@@ -205,6 +206,7 @@ def build_dataset(cfg, split):
                 normalize_skeleton=normalize,
                 with_jitter=jitter,
                 training=training,
+                wrist_positions_root=d.get('wrist_positions_root'),
             )
         else:
             raise ValueError(f"Unknown modality: {modality}")
@@ -303,19 +305,28 @@ def build_dataset(cfg, split):
     return ds
 
 
-def build_loaders(cfg):
+def build_loaders(cfg, rank=0, world_size=1):
+    from torch.utils.data import DistributedSampler
     t = cfg['training']
     d = cfg['dataset']
     clip_len = d['clip_len']
     modality = cfg['experiment']['modality']
     num_workers = t.get('num_workers', 8)
+    distributed = world_size > 1
 
     batch_size = t.get('batch_size') or _default_batch_size(modality, clip_len)
 
     train_ds = build_dataset(cfg, 'train')
     val_ds = build_dataset(cfg, 'val')
 
-    if d.get('weighted_sampling', False):
+    if distributed:
+        train_sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
+        val_sampler   = DistributedSampler(val_ds,   num_replicas=world_size, rank=rank, shuffle=False)
+        train_loader  = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,
+                                   num_workers=num_workers, pin_memory=True)
+        val_loader    = DataLoader(val_ds,   batch_size=batch_size, sampler=val_sampler,
+                                   num_workers=num_workers, pin_memory=True)
+    elif d.get('weighted_sampling', False):
         from torch.utils.data import WeightedRandomSampler
         from collections import Counter
         labels = train_ds.labels
@@ -324,16 +335,19 @@ def build_loaders(cfg):
         sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
         train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler,
                                   num_workers=num_workers, pin_memory=True)
+        val_loader   = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
+                                  num_workers=num_workers, pin_memory=True)
     else:
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                                   num_workers=num_workers, pin_memory=True)
+        val_loader   = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
+                                  num_workers=num_workers, pin_memory=True)
 
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                            num_workers=num_workers, pin_memory=True)
     return train_loader, val_loader
 
 
-def build_test_loader(cfg):
+def build_test_loader(cfg, rank=0, world_size=1):
+    from torch.utils.data import DistributedSampler
     t = cfg['training']
     d = cfg['dataset']
     clip_len = d['clip_len']
@@ -342,6 +356,11 @@ def build_test_loader(cfg):
 
     batch_size = t.get('batch_size') or _default_batch_size(modality, clip_len)
     test_ds = build_dataset(cfg, 'test')
+
+    if world_size > 1:
+        sampler = DistributedSampler(test_ds, num_replicas=world_size, rank=rank, shuffle=False)
+        return DataLoader(test_ds, batch_size=batch_size, sampler=sampler,
+                          num_workers=num_workers, pin_memory=True)
     return DataLoader(test_ds, batch_size=batch_size, shuffle=False,
                       num_workers=num_workers, pin_memory=True)
 

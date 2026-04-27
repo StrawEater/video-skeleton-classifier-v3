@@ -5,6 +5,8 @@ import os
 
 import torch
 import torch.nn as nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from tqdm import tqdm
 
@@ -16,18 +18,39 @@ class Trainer:
     """
     Handles training and evaluation for skeleton, video, and multimodal models.
     Modality is determined by cfg['experiment']['modality'].
+
+    Multi-GPU (DDP): launch with torchrun instead of python:
+        torchrun --nproc_per_node=2 train.py configs/oakink2_skeleton.yaml
+    Single-GPU: python train.py configs/oakink2_skeleton.yaml  (unchanged)
     """
 
     def __init__(self, cfg, load_pretrained=True):
         self.cfg = cfg
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.modality = cfg['experiment']['modality']
+
+        # --- Distributed setup (no-op when not launched with torchrun) ---
+        self.distributed = int(os.environ.get('RANK', -1)) != -1
+        if self.distributed:
+            dist.init_process_group(backend='nccl')
+            self.rank       = dist.get_rank()
+            self.world_size = dist.get_world_size()
+            self.local_rank = int(os.environ['LOCAL_RANK'])
+            torch.cuda.set_device(self.local_rank)
+            self.device = torch.device(f'cuda:{self.local_rank}')
+        else:
+            self.rank = self.local_rank = 0
+            self.world_size = 1
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.is_main = (self.rank == 0)
 
         t = cfg['training']
         checkpoint_base = os.path.expanduser(t['checkpoint_dir'])
         self.checkpoint_dir = os.path.join(checkpoint_base, cfg['experiment']['name'])
 
         self.model = build_model(cfg, load_pretrained=load_pretrained).to(self.device)
+        if self.distributed:
+            self.model = DDP(self.model, device_ids=[self.local_rank])
+
         self.criterion = nn.CrossEntropyLoss()
 
         # Hyperparameters
@@ -46,6 +69,11 @@ class Trainer:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    @property
+    def _raw_model(self):
+        """Unwrap DDP to access the underlying module (e.g. for saving)."""
+        return self.model.module if self.distributed else self.model
 
     def _forward(self, batch):
         if self.modality in ('skeleton', 'video'):
@@ -110,28 +138,41 @@ class Trainer:
 
     def train(self):
         if self.skip_if_exists and os.path.exists(self.checkpoint_dir):
-            print(f"Skipping {self.cfg['experiment']['name']} — checkpoint dir already exists.")
+            if self.is_main:
+                print(f"Skipping {self.cfg['experiment']['name']} — checkpoint dir already exists.")
             return
 
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        train_loader, val_loader = build_loaders(self.cfg)
+        if self.is_main:
+            os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        train_loader, val_loader = build_loaders(self.cfg, self.rank, self.world_size)
         self._build_optimizer(len(train_loader))
 
-        print(f"\n{'='*60}")
-        print(f"Experiment : {self.cfg['experiment']['name']}")
-        print(f"Modality   : {self.modality}")
-        print(f"Checkpoints: {self.checkpoint_dir}")
-        print(f"Dataset    : {self.cfg['dataset']['name']}  "
-              f"({len(train_loader.dataset)} train / {len(val_loader.dataset)} val)")
-        print(f"{'='*60}\n")
+        if self.is_main:
+            print(f"\n{'='*60}")
+            print(f"Experiment : {self.cfg['experiment']['name']}")
+            print(f"Modality   : {self.modality}")
+            if self.distributed:
+                print(f"GPUs       : {self.world_size}")
+            print(f"Checkpoints: {self.checkpoint_dir}")
+            print(f"Dataset    : {self.cfg['dataset']['name']}  "
+                  f"({len(train_loader.dataset)} train / {len(val_loader.dataset)} val)")
+            print(f"{'='*60}\n")
 
         last_best = -math.inf
         patience_lr = patience_stop = 0
         last_ckpt = None
 
         for epoch in range(self.total_epochs):
+            # Required so each epoch gets different data on each rank
+            if self.distributed and hasattr(train_loader.sampler, 'set_epoch'):
+                train_loader.sampler.set_epoch(epoch)
+
             train_loss, train_top1, _ = self._run_epoch(train_loader, training=True)
             val_loss, val_top1, val_top5 = self._run_epoch(val_loader, training=False)
+
+            if not self.is_main:
+                continue
 
             ep = epoch + 1
             lr = self.optimizer.param_groups[0]['lr']
@@ -145,7 +186,7 @@ class Trainer:
                     os.remove(last_ckpt)
                 fname = f"epoch{ep:03d}_train{train_top1:.2f}_val{val_top1:.2f}.pth"
                 last_ckpt = os.path.join(self.checkpoint_dir, fname)
-                torch.save(self.model.state_dict(), last_ckpt)
+                torch.save(self._raw_model.state_dict(), last_ckpt)
                 last_best = val_top1
                 patience_lr = patience_stop = 0
                 print(f"  -> saved {fname}")
@@ -163,7 +204,8 @@ class Trainer:
                 print(f"  Early stop at epoch {ep}.")
                 break
 
-        print(f"\nFinished: {self.cfg['experiment']['name']}")
+        if self.is_main:
+            print(f"\nFinished: {self.cfg['experiment']['name']}")
         self._cleanup()
 
     def evaluate(self, checkpoint_path=None, split='test'):
@@ -179,10 +221,14 @@ class Trainer:
             checkpoint_path = ckpts[-1]
 
         state = torch.load(checkpoint_path, map_location=self.device)
-        self.model.load_state_dict(state)
+        # Checkpoints are always saved from _raw_model so keys have no 'module.' prefix
+        self._raw_model.load_state_dict(state)
         self.model.eval()
 
-        loader = build_test_loader(self.cfg) if split == 'test' else build_loaders(self.cfg)[1]
+        if split == 'test':
+            loader = build_test_loader(self.cfg, self.rank, self.world_size)
+        else:
+            _, loader = build_loaders(self.cfg, self.rank, self.world_size)
 
         total_loss = total_top1 = total_top5 = n_samples = 0
 
@@ -221,3 +267,5 @@ class Trainer:
         del self.model, self.criterion
         torch.cuda.empty_cache()
         gc.collect()
+        if self.distributed:
+            dist.destroy_process_group()

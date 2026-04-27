@@ -12,7 +12,10 @@ class OakInkSkeletonDataset(Dataset):
     Skeleton dataset for OakInkV2.
     Loads hand keypoints from per-scene .npy files.
     shape: (N, 2, 21, 3) — N frames, 2 hands, 21 joints, xyz.
-    Mirrors H2OSkeletonDataset interface.
+
+    When wrist_positions_root is provided the wrist joint (index 0 per hand)
+    is replaced with the absolute camera-space wrist position, giving the model
+    both global position and wrist-relative hand shape.
     """
 
     def __init__(
@@ -22,14 +25,16 @@ class OakInkSkeletonDataset(Dataset):
         clip_len=8,
         num_joints=21,
         num_hands=2,
-        normalize_skeleton=True,
+        normalize_skeleton=False,
         with_jitter=True,
         training=True,
         pad_mode='repeat',
+        wrist_positions_root=None,
     ):
         self.df = pd.read_csv(split_path, sep='\t')
         print(f"Loaded {len(self.df)} samples from {split_path}")
         self.keypoints_root = keypoints_root
+        self.wrist_positions_root = wrist_positions_root
         self.clip_len = clip_len
         self.num_joints = num_joints
         self.num_hands = num_hands
@@ -38,6 +43,7 @@ class OakInkSkeletonDataset(Dataset):
         self.training = training
         self.pad_mode = pad_mode
         self._kp_cache = {}
+        self._wp_cache = {}
 
     def __len__(self):
         return len(self.df)
@@ -47,6 +53,14 @@ class OakInkSkeletonDataset(Dataset):
             path = os.path.join(self.keypoints_root, f"{scene_id}.npy")
             self._kp_cache[scene_id] = np.load(path)  # (N, 2, 21, 3)
         return self._kp_cache[scene_id]
+
+    def _load_wrist_positions(self, scene_id):
+        if self.wrist_positions_root is None:
+            return None
+        if scene_id not in self._wp_cache:
+            path = os.path.join(self.wrist_positions_root, f"{scene_id}.npy")
+            self._wp_cache[scene_id] = np.load(path)  # (N, 2, 3)
+        return self._wp_cache[scene_id]
 
     def _normalize_skeleton(self, skeleton):
         if skeleton.size == 0:
@@ -80,7 +94,8 @@ class OakInkSkeletonDataset(Dataset):
         start = int(row['start_frame'])
         end = int(row['end_frame'])
 
-        keypoints = self._load_keypoints(scene_id)  # (N, 2, 21, 3)
+        keypoints       = self._load_keypoints(scene_id)        # (N, 2, 21, 3)
+        wrist_positions = self._load_wrist_positions(scene_id)  # (N, 2, 3) or None
         n = len(keypoints)
 
         max_start = end - self.clip_len + 1
@@ -95,7 +110,16 @@ class OakInkSkeletonDataset(Dataset):
         for i in range(self.clip_len):
             jitter = random.randint(-2, 2) if (self.with_jitter and self.training) else 0
             k = min(max(clip_start + i + jitter, start), end, n - 1)
-            kp = keypoints[k].reshape(self.num_hands * self.num_joints, 3).copy()  # (42, 3)
+            kp = keypoints[k].copy()  # (2, 21, 3)
+
+            # Replace wrist joint (index 0 per hand) with absolute camera-space position.
+            # Joints 1-20 remain wrist-relative, giving the model both global location
+            # and local hand shape.
+            if wrist_positions is not None:
+                kp[0, 0, :] = wrist_positions[k, 0, :]  # right wrist
+                kp[1, 0, :] = wrist_positions[k, 1, :]  # left wrist
+
+            kp = kp.reshape(self.num_hands * self.num_joints, 3)  # (42, 3)
             if self.normalize_skeleton:
                 kp = self._normalize_skeleton(kp)
             frames.append(kp)
@@ -191,9 +215,10 @@ class MultimodalOakInkDataset(Dataset):
         clip_len=8,
         num_joints=21,
         video_transform=None,
-        normalize_skeleton=True,
+        normalize_skeleton=False,
         with_jitter=True,
         training=True,
+        wrist_positions_root=None,
     ):
         self.df = pd.read_csv(split_path, sep='\t')
         print(f"Loaded {len(self.df)} samples from {split_path}")
@@ -214,6 +239,7 @@ class MultimodalOakInkDataset(Dataset):
             normalize_skeleton=normalize_skeleton,
             with_jitter=with_jitter,
             training=training,
+            wrist_positions_root=wrist_positions_root,
         )
 
     def __len__(self):
