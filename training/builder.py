@@ -284,9 +284,10 @@ def build_dataset(cfg, split):
         keep = [i for i, lid in enumerate(ds.df['label_id'])
                 if id_to_effective.get(int(lid)) in valid_effective]
 
-        # Build contiguous mapping: original label_id -> new int id
+        # Build contiguous mapping from the FULL valid set (not just what's in this split)
+        # so train/val/test all share the same label integers.
         kept_orig_labels = [int(ds.df['label_id'].iloc[i]) for i in keep]
-        sorted_effective = sorted(valid_effective & {id_to_effective[l] for l in kept_orig_labels})
+        sorted_effective = sorted(valid_effective)
         effective_to_new = {e: i for i, e in enumerate(sorted_effective)}
         label_map = {lid: effective_to_new[id_to_effective[lid]]
                      for lid in set(kept_orig_labels)}
