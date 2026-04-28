@@ -333,8 +333,9 @@ def build_loaders(cfg, rank=0, world_size=1):
         # Different seed per rank so GPUs oversample different segments each step
         generator = torch.Generator()
         generator.manual_seed(42 + rank)
+        oversample_factor = d.get('oversample_factor', 1)
         train_sampler = WeightedRandomSampler(
-            sample_weights, num_samples=len(sample_weights),
+            sample_weights, num_samples=int(len(sample_weights) * oversample_factor),
             replacement=True, generator=generator,
         )
         train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,

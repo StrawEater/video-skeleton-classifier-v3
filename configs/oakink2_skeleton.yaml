@@ -4,6 +4,9 @@ experiment:
   name: oakink2_skeleton
   modality: skeleton
 
+dataset:
+  oversample_factor: 2   # draw 2x len(train_set) samples per epoch via weighted sampler
+
 model:
   size: tiny      # overridden by sweep
   pretrained: false
