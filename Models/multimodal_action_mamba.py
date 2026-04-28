@@ -156,18 +156,21 @@ class MultimodalActionMamba(nn.Module):
         Returns:
             logits: (B, num_classes) action predictions
         """
-        video_features    = self.video_encoder.forward_features(video_input)     # (B, embed_dim)
-        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input) # (B, embed_dim)
+        # VisionMamba returns only CLS: (B, D) → unsqueeze to (B, 1, D) for the fusion head
+        video_features    = self.video_encoder.forward_features(video_input).unsqueeze(1)
+        # SkeletonMamba with is_embedding=True returns (B, 1+T*J, D)
+        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input, is_embedding=True)
         return self.fusion_head(video_features, skeleton_features)
 
     def forward_video_only(self, video_input):
-        video_features = self.video_encoder.forward_features(video_input)  # (B, embed_dim)
+        video_features = self.video_encoder.forward_features(video_input).unsqueeze(1)  # (B, 1, D)
         zero_skeleton  = torch.zeros_like(video_features)
         return self.fusion_head(video_features, zero_skeleton)
 
     def forward_skeleton_only(self, skeleton_input):
-        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input)  # (B, embed_dim)
-        zero_video        = torch.zeros_like(skeleton_features)
+        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input, is_embedding=True)
+        B, D = skeleton_features.shape[0], skeleton_features.shape[2]
+        zero_video = torch.zeros(B, 1, D, device=skeleton_features.device, dtype=skeleton_features.dtype)
         return self.fusion_head(zero_video, skeleton_features)
 
     def extract_video_features(self, video_input):
