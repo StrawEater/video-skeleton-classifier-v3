@@ -47,3 +47,4 @@ dataset:
   action_only: true
   max_train_samples: null
   min_class_samples: 25
+  weighted_sampling: true
