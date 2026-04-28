@@ -164,19 +164,6 @@ class Trainer:
             os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         train_loader, val_loader = build_loaders(self.cfg, self.rank, self.world_size)
-
-        if self.cfg['dataset'].get('weighted_sampling', False):
-            from collections import Counter
-            labels = train_loader.dataset.labels
-            counts = Counter(labels)
-            n_classes = self.cfg['dataset']['num_classes']
-            w = torch.tensor([1.0 / counts.get(c, 1) for c in range(n_classes)],
-                             dtype=torch.float32, device=self.device)
-            w = w / w.sum() * n_classes   # normalize: keeps effective LR similar
-            self.criterion = nn.CrossEntropyLoss(weight=w)
-            if self.is_main:
-                print(f"  Class-weighted loss: min={w.min():.3f}  max={w.max():.3f}")
-
         self._build_optimizer(len(train_loader))
 
         if self.is_main:

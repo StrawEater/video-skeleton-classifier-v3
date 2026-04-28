@@ -324,18 +324,36 @@ def build_loaders(cfg, rank=0, world_size=1):
     train_ds = build_dataset(cfg, 'train')
     val_ds = build_dataset(cfg, 'val')
 
-    if distributed:
+    if d.get('weighted_sampling', False):
+        from torch.utils.data import WeightedRandomSampler
+        from collections import Counter
+        labels = train_ds.labels
+        counts = Counter(labels)
+        sample_weights = [1.0 / counts[l] for l in labels]
+        # Different seed per rank so GPUs oversample different segments each step
+        generator = torch.Generator()
+        generator.manual_seed(42 + rank)
+        train_sampler = WeightedRandomSampler(
+            sample_weights, num_samples=len(sample_weights),
+            replacement=True, generator=generator,
+        )
+        train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,
+                                  num_workers=num_workers, pin_memory=True)
+    elif distributed:
         train_sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
-        val_sampler   = DistributedSampler(val_ds,   num_replicas=world_size, rank=rank, shuffle=False)
         train_loader  = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,
-                                   num_workers=num_workers, pin_memory=True)
-        val_loader    = DataLoader(val_ds,   batch_size=batch_size, sampler=val_sampler,
                                    num_workers=num_workers, pin_memory=True)
     else:
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                                   num_workers=num_workers, pin_memory=True)
-        val_loader   = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                                  num_workers=num_workers, pin_memory=True)
+
+    if distributed:
+        val_sampler = DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False)
+        val_loader  = DataLoader(val_ds, batch_size=batch_size, sampler=val_sampler,
+                                 num_workers=num_workers, pin_memory=True)
+    else:
+        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
+                                num_workers=num_workers, pin_memory=True)
 
     return train_loader, val_loader
 
