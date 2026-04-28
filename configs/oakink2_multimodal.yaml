@@ -6,12 +6,12 @@ experiment:
 
 dataset:
   name: oakink2
-  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_train.txt
-  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_val.txt
-  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_test.txt
-  frames_root:          /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/scenes
-  keypoints_root:       /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/hand_keypoints
-  wrist_positions_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/wrist_positions
+  train_split: /root/DATA/OakInkV2_jpeg/label_split/action_train.txt
+  val_split:   /root/DATA/OakInkV2_jpeg/label_split/action_val.txt
+  test_split:  /root/DATA/OakInkV2_jpeg/label_split/action_test.txt
+  frames_root:          /root/DATA/OakInkV2_jpeg/scenes
+  keypoints_root:       /root/DATA/OakInkV2_jpeg/hand_keypoints
+  wrist_positions_root: /root/DATA/OakInkV2_jpeg/wrist_positions
 
   num_classes: 32     # action-only classes with >= 25 segments in the full dataset
   clip_len: 8
@@ -34,7 +34,7 @@ model:
   fusion_strategy: weighted       # overridden by sweep
 
 training:
-  total_epochs: 35    # multimodal converges faster when using pretrained encoders
+  total_epochs: 80    # multimodal converges faster when using pretrained encoders
   learning_rate: 2.0e-4
   weight_decay: 0.01
   lr_patience: 3

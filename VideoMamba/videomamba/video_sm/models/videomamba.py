@@ -26,10 +26,10 @@ except ImportError:
     RMSNorm, layer_norm_fn, rms_norm_fn = None, None, None
 
 
-MODEL_PATH = 'your_model_path'
+MODEL_PATH = '/workspace/video-skeleton-classifier-v3/pretrained'
 _MODELS = {
-    "videomamba_t16_in1k": os.path.join(MODEL_PATH, "videomamba_t16_in1k_res224.pth"),
-    "videomamba_s16_in1k": os.path.join(MODEL_PATH, "videomamba_s16_in1k_res224.pth"),
+    "videomamba_t16_ssv2_f8_res224": os.path.join(MODEL_PATH, "videomamba_t16_ssv2_f8_res224.pth"),
+    "videomamba_s16_ssv2_f8_res224": os.path.join(MODEL_PATH, "videomamba_s16_ssv2_f8_res224.pth"),
     "videomamba_m16_in1k": os.path.join(MODEL_PATH, "videomamba_m16_in1k_res224.pth"),
 }
 
@@ -412,7 +412,7 @@ def videomamba_tiny(pretrained=False, **kwargs):
     model.default_cfg = _cfg()
     if pretrained:
         print('load pretrained weights')
-        state_dict = torch.load(_MODELS["videomamba_t16_in1k"], map_location='cpu')
+        state_dict = torch.load(_MODELS["videomamba_t16_ssv2_f8_res224"], map_location='cpu')
         load_state_dict(model, state_dict, center=True)
     return model
 
@@ -431,7 +431,7 @@ def videomamba_small(pretrained=False, **kwargs):
     model.default_cfg = _cfg()
     if pretrained:
         print('load pretrained weights')
-        state_dict = torch.load(_MODELS["videomamba_s16_in1k"], map_location='cpu')
+        state_dict = torch.load(_MODELS["videomamba_s16_ssv2_f8_res224"], map_location='cpu')
         load_state_dict(model, state_dict, center=True)
     return model
 

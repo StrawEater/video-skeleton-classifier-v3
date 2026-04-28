@@ -16,8 +16,11 @@ except ImportError:
         "mamba_ssm is required. Install with: pip install causal-conv1d mamba-ssm"
     )
 
-MODEL_PATH = "pre_trained_models"
-
+MODEL_PATH = '/workspace/video-skeleton-classifier-v3/pretrained_hands'
+_MODELS = {
+    "tiny": os.path.join(MODEL_PATH, "tiny.pt"),
+    "small": os.path.join(MODEL_PATH, "small.pt"),
+}
 
 # ---------------------------------------------------------------------------
 # Mamba block (pre-norm, residual-in-residual)
@@ -171,7 +174,7 @@ def skeleton_mamba_tiny(num_joints=42, num_frames=8, num_classes=1000, embed_dim
         rms_norm=True, residual_in_fp32=True, **kwargs,
     )
     if pretrained and pretrained_path is not None:
-        _load_weights(model, os.path.join(MODEL_PATH, pretrained_path))
+        _load_weights(model, _MODELS["tiny"])
     return model
 
 
@@ -183,7 +186,7 @@ def skeleton_mamba_small(num_joints=42, num_frames=8, num_classes=1000, embed_di
         rms_norm=True, residual_in_fp32=True, **kwargs,
     )
     if pretrained and pretrained_path is not None:
-        _load_weights(model, os.path.join(MODEL_PATH, pretrained_path))
+        _load_weights(model, _MODELS["small"])
     return model
 
 

@@ -46,8 +46,8 @@ _VIDEOMAMBA_WEIGHTS = {
 }
 
 _SKELETON_WEIGHTS = {
-    ('tiny',   8):  'skeleton_tiny_8f.pth',
-    ('small',  8):  'skeleton_small_8f.pth',
+    ('tiny',   8):  'tiny_hand.pt',
+    ('small',  8):  'small_hand.pt',
     ('medium', 8):  'skeleton_medium_8f.pth',
     ('tiny',  32):  'skeleton_tiny_32f.pth',
     ('small', 32):  'skeleton_small_32f.pth',
