@@ -11,10 +11,11 @@ dataset:
   test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_test.txt
   frames_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/scenes
 
-  num_classes: 22     # classes with >= 25 segments in the full dataset
+  num_classes: 32     # action-only classes with >= 25 segments in the full dataset
   clip_len: 8
   with_jitter: true
   num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
+  action_only: true
   max_train_samples: null
   min_class_samples: 25
 
