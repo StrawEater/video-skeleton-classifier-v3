@@ -105,16 +105,15 @@ def build_model(cfg, load_pretrained=True):
             'small': videomamba_small,
             'medium': videomamba_middle,
         }
-        use_pretrained = load_pretrained and m.get('pretrained', False)
-        pretrained_path = None
-        if use_pretrained:
-            pretrained_path = _pretrained_path(_VIDEOMAMBA_WEIGHTS, size, clip_len, pretrained_dir, m.get('pretrained_path'))
         model = _vid_factory[size](
-            pretrained=use_pretrained,
+            pretrained=False,
             num_classes=num_classes,
             num_frames=clip_len,
-            pretrained_path=pretrained_path,
         )
+        if load_pretrained and m.get('pretrained', False):
+            path = _pretrained_path(_VIDEOMAMBA_WEIGHTS, size, clip_len, pretrained_dir, m.get('pretrained_path'))
+            model.load_pretrained(path)
+            print(f"Loaded video weights: {path}")
         return model
 
     if modality == 'multimodal':
