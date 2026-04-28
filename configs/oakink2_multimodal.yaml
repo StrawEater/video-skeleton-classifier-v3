@@ -13,7 +13,7 @@ dataset:
   keypoints_root:       /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/hand_keypoints
   wrist_positions_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/wrist_positions
 
-  num_classes: 262    # 306 original minus 44 'hold' classes
+  num_classes: 22     # classes with >= 25 segments in the full dataset
   clip_len: 8
   num_joints: 21      # per hand; model receives num_joints * num_hands = 42
   num_hands: 2
@@ -21,7 +21,7 @@ dataset:
   with_jitter: true
   num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
   max_train_samples: null
-  min_class_samples: null
+  min_class_samples: 25
 
 model:
   size: tiny          # overridden by sweep
