@@ -21,6 +21,7 @@ dataset:
   with_jitter: true
   num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
   action_only: true
+  weighted_sampling: true
   max_train_samples: null
   min_class_samples: 25
 
