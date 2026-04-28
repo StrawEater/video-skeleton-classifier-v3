@@ -1,0 +1,13 @@
+# Video-only sweep: tiny and small (pretrained) on OakInkV2_jpeg 262 classes.
+# Produces 2 experiments:
+#   oakink2_video__tiny
+#   oakink2_video__small
+#
+# Usage: python train.py configs/sweeps/video.yaml
+
+sweep:
+  base: configs/oakink2_video.yaml
+  grid:
+    model.size:
+      tiny:  tiny
+      small: small

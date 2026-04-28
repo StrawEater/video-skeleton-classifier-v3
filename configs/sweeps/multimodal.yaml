@@ -1,0 +1,22 @@
+# Multimodal sweep: tiny and small × 4 fusion strategies (pretrained encoders).
+# Produces 2 × 4 = 8 experiments:
+#   oakink2_multimodal__tiny__weighted
+#   oakink2_multimodal__tiny__context
+#   oakink2_multimodal__tiny__new
+#   oakink2_multimodal__tiny__average
+#   oakink2_multimodal__small__weighted
+#   ... etc.
+#
+# Usage: python train.py configs/sweeps/multimodal.yaml
+
+sweep:
+  base: configs/oakink2_multimodal.yaml
+  grid:
+    model.size:
+      tiny:  tiny
+      small: small
+    model.fusion_strategy:
+      weighted: weighted
+      context:  context
+      new:      new
+      average:  average

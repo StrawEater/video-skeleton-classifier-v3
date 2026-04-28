@@ -7,6 +7,14 @@ from PIL import Image
 import pandas as pd
 
 
+def _eval_clip_starts(start, end, clip_len, num_clips):
+    """Return num_clips evenly-spaced clip start positions across [start, end]."""
+    max_start = max(start, end - clip_len)
+    if num_clips == 1:
+        return [(start + max_start) // 2]
+    return np.linspace(start, max_start, num_clips).round().astype(int).tolist()
+
+
 class OakInkSkeletonDataset(Dataset):
     """
     Skeleton dataset for OakInkV2.
@@ -30,6 +38,7 @@ class OakInkSkeletonDataset(Dataset):
         training=True,
         pad_mode='repeat',
         wrist_positions_root=None,
+        num_eval_clips=1,
     ):
         self.df = pd.read_csv(split_path, sep='\t')
         print(f"Loaded {len(self.df)} samples from {split_path}")
@@ -42,6 +51,7 @@ class OakInkSkeletonDataset(Dataset):
         self.with_jitter = with_jitter
         self.training = training
         self.pad_mode = pad_mode
+        self.num_eval_clips = num_eval_clips
         self._kp_cache = {}
         self._wp_cache = {}
 
@@ -90,42 +100,40 @@ class OakInkSkeletonDataset(Dataset):
     def __getitem__(self, index):
         row = self.df.iloc[index]
         scene_id = row['scene_id']
-        label = int(row['label_id'])
-        start = int(row['start_frame'])
-        end = int(row['end_frame'])
+        label    = int(row['label_id'])
+        start    = int(row['start_frame'])
+        end      = int(row['end_frame'])
 
-        keypoints       = self._load_keypoints(scene_id)        # (N, 2, 21, 3)
-        wrist_positions = self._load_wrist_positions(scene_id)  # (N, 2, 3) or None
+        if self.training:
+            max_start  = max(start, end - self.clip_len + 1)
+            clip_start = random.randint(start, max_start) if max_start > start else start
+            return self._load_clip(scene_id, start, end, clip_start), label
+
+        # Eval: return N evenly-spaced clips for voting
+        clip_starts = _eval_clip_starts(start, end, self.clip_len, self.num_eval_clips)
+        clips = torch.stack([self._load_clip(scene_id, start, end, cs) for cs in clip_starts])
+        # clips: (num_eval_clips, clip_len, 42, 3) — or (1, ...) when num_eval_clips=1
+        return clips, label
+
+    def _load_clip(self, scene_id, start, end, clip_start):
+        """Load a clip given a pre-determined clip_start (used by MultimodalOakInkDataset)."""
+        keypoints       = self._load_keypoints(scene_id)
+        wrist_positions = self._load_wrist_positions(scene_id)
         n = len(keypoints)
-
-        max_start = end - self.clip_len + 1
-        if max_start < start:
-            clip_start = start
-        elif self.training:
-            clip_start = random.randint(start, max_start)
-        else:
-            clip_start = (start + max_start) // 2
-
         frames = []
         for i in range(self.clip_len):
             jitter = random.randint(-2, 2) if (self.with_jitter and self.training) else 0
             k = min(max(clip_start + i + jitter, start), end, n - 1)
-            kp = keypoints[k].copy()  # (2, 21, 3)
-
-            # Replace wrist joint (index 0 per hand) with absolute camera-space position.
-            # Joints 1-20 remain wrist-relative, giving the model both global location
-            # and local hand shape.
+            kp = keypoints[k].copy()
             if wrist_positions is not None:
-                kp[0, 0, :] = wrist_positions[k, 0, :]  # right wrist
-                kp[1, 0, :] = wrist_positions[k, 1, :]  # left wrist
-
-            kp = kp.reshape(self.num_hands * self.num_joints, 3)  # (42, 3)
+                kp[0, 0, :] = wrist_positions[k, 0, :]
+                kp[1, 0, :] = wrist_positions[k, 1, :]
+            kp = kp.reshape(self.num_hands * self.num_joints, 3)
             if self.normalize_skeleton:
                 kp = self._normalize_skeleton(kp)
             frames.append(kp)
-
         frames = self._pad_frames(frames, self.clip_len)
-        return torch.from_numpy(np.stack(frames)).float(), label  # (clip_len, 42, 3), int
+        return torch.from_numpy(np.stack(frames)).float()
 
 
 class OakInkVideoDataset(Dataset):
@@ -148,6 +156,7 @@ class OakInkVideoDataset(Dataset):
         transform=None,
         with_jitter=True,
         training=True,
+        num_eval_clips=1,
     ):
         self.df = pd.read_csv(split_path, sep='\t')
         print(f"Loaded {len(self.df)} samples from {split_path}")
@@ -156,12 +165,13 @@ class OakInkVideoDataset(Dataset):
         self.transform = transform
         self.with_jitter = with_jitter
         self.training = training
+        self.num_eval_clips = num_eval_clips
 
     def __len__(self):
         return len(self.df)
 
     def _load_frame(self, scene_id, t):
-        # t is the video timestep (0-indexed); PNG name = 4*t+1 (1-indexed original frame)
+        # t is the video timestep (0-indexed); frame name = 4*t+1 (1-indexed original frame)
         # Fall back to the last available frame if this one is missing
         while t >= 0:
             path = os.path.join(self.frames_root, scene_id, f"{4 * t + 1:06d}.jpg")
@@ -170,33 +180,37 @@ class OakInkVideoDataset(Dataset):
             t -= 1
         raise FileNotFoundError(f"No frames found for scene {scene_id}")
 
-    def __getitem__(self, index):
-        row = self.df.iloc[index]
-        scene_id = row['scene_id']
-        label = int(row['label_id'])
-        # Convert keypoint-frame indices to video timestep indices
-        vid_start = int(row['start_frame']) // 4
-        vid_end = int(row['end_frame']) // 4
-
-        max_start = vid_end - self.clip_len + 1
-        if max_start < vid_start:
-            clip_start = vid_start
-        elif self.training:
-            clip_start = random.randint(vid_start, max_start)
-        else:
-            clip_start = (vid_start + max_start) // 2
-
+    def _load_clip(self, scene_id, start, end, clip_start):
+        """Load a clip given a pre-determined clip_start in skeleton frame space."""
+        # Convert skeleton frame space → video timestep space (stride-4)
+        vid_start      = start      // 4
+        vid_end        = end        // 4
+        vid_clip_start = clip_start // 4
         frames = []
         for i in range(self.clip_len):
             jitter = random.randint(-2, 2) if (self.with_jitter and self.training) else 0
-            t = min(max(clip_start + i + jitter, vid_start), vid_end)
+            t = min(max(vid_clip_start + i + jitter, vid_start), vid_end)
             frames.append(self._load_frame(scene_id, t))
+        import torchvision.transforms.functional as TF
+        frames = [self.transform(f) if self.transform else TF.to_tensor(f) for f in frames]
+        return torch.stack(frames, dim=0).permute(1, 0, 2, 3)  # (C, T, H, W)
 
-        if self.transform:
-            frames = [self.transform(f) for f in frames]
+    def __getitem__(self, index):
+        row = self.df.iloc[index]
+        scene_id = row['scene_id']
+        label    = int(row['label_id'])
+        start    = int(row['start_frame'])
+        end      = int(row['end_frame'])
 
-        video = torch.stack(frames, dim=0).permute(1, 0, 2, 3)  # (C, T, H, W)
-        return video, label
+        if self.training:
+            max_start  = max(start, end - self.clip_len * 4 + 1)  # skeleton space
+            clip_start = random.randint(start, max_start) if max_start > start else start
+            return self._load_clip(scene_id, start, end, clip_start), label
+
+        clip_starts = _eval_clip_starts(start, end, self.clip_len * 4, self.num_eval_clips)
+        clips = torch.stack([self._load_clip(scene_id, start, end, cs) for cs in clip_starts])
+        # clips: (num_eval_clips, C, clip_len, H, W)
+        return clips, label
 
 
 class MultimodalOakInkDataset(Dataset):
@@ -219,9 +233,12 @@ class MultimodalOakInkDataset(Dataset):
         with_jitter=True,
         training=True,
         wrist_positions_root=None,
+        num_eval_clips=1,
     ):
         self.df = pd.read_csv(split_path, sep='\t')
         print(f"Loaded {len(self.df)} samples from {split_path}")
+        self.num_eval_clips = num_eval_clips
+        self.training = training
 
         self.video_ds = OakInkVideoDataset(
             split_path=split_path,
@@ -230,6 +247,7 @@ class MultimodalOakInkDataset(Dataset):
             transform=video_transform,
             with_jitter=with_jitter,
             training=training,
+            num_eval_clips=num_eval_clips,
         )
         self.skeleton_ds = OakInkSkeletonDataset(
             split_path=split_path,
@@ -240,12 +258,31 @@ class MultimodalOakInkDataset(Dataset):
             with_jitter=with_jitter,
             training=training,
             wrist_positions_root=wrist_positions_root,
+            num_eval_clips=num_eval_clips,
         )
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, index):
-        video, label = self.video_ds[index]
-        skeleton, _ = self.skeleton_ds[index]
-        return video, skeleton, label
+        row = self.df.iloc[index]
+        label    = int(row['label_id'])
+        scene_id = row['scene_id']
+        start    = int(row['start_frame'])
+        end      = int(row['end_frame'])
+        clip_len = self.skeleton_ds.clip_len
+
+        if self.training:
+            max_start  = max(start, end - clip_len + 1)
+            clip_start = random.randint(start, max_start) if max_start > start else start
+            video    = self.video_ds._load_clip(scene_id, start, end, clip_start)
+            skeleton = self.skeleton_ds._load_clip(scene_id, start, end, clip_start)
+            return video, skeleton, label
+
+        # Eval: N shared clip windows for both modalities
+        clip_starts = _eval_clip_starts(start, end, clip_len, self.num_eval_clips)
+        videos    = torch.stack([self.video_ds._load_clip(scene_id, start, end, cs)    for cs in clip_starts])
+        skeletons = torch.stack([self.skeleton_ds._load_clip(scene_id, start, end, cs) for cs in clip_starts])
+        # videos:    (num_eval_clips, C, T, H, W)
+        # skeletons: (num_eval_clips, T, J, D)
+        return videos, skeletons, label

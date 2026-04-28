@@ -174,6 +174,8 @@ def build_dataset(cfg, split):
     jitter = d.get('with_jitter', True) and training
     dataset_name = d.get('name', 'oakink2')
 
+    num_eval_clips = 1 if training else d.get('num_eval_clips', 1)
+
     if dataset_name == 'oakink2':
         if modality == 'skeleton':
             ds = OakInkSkeletonDataset(
@@ -185,6 +187,7 @@ def build_dataset(cfg, split):
                 with_jitter=jitter,
                 training=training,
                 wrist_positions_root=d.get('wrist_positions_root'),
+                num_eval_clips=num_eval_clips,
             )
         elif modality == 'video':
             ds = OakInkVideoDataset(
@@ -207,6 +210,7 @@ def build_dataset(cfg, split):
                 with_jitter=jitter,
                 training=training,
                 wrist_positions_root=d.get('wrist_positions_root'),
+                num_eval_clips=num_eval_clips,
             )
         else:
             raise ValueError(f"Unknown modality: {modality}")

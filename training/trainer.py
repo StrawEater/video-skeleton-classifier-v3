@@ -30,8 +30,11 @@ class Trainer:
 
         # --- Distributed setup (no-op when not launched with torchrun) ---
         self.distributed = int(os.environ.get('RANK', -1)) != -1
+        self._owns_pg = False  # whether this Trainer initialized the process group
         if self.distributed:
-            dist.init_process_group(backend='nccl')
+            if not dist.is_initialized():
+                dist.init_process_group(backend='nccl')
+                self._owns_pg = True
             self.rank       = dist.get_rank()
             self.world_size = dist.get_world_size()
             self.local_rank = int(os.environ['LOCAL_RANK'])
@@ -78,16 +81,31 @@ class Trainer:
     def _forward(self, batch):
         if self.modality in ('skeleton', 'video'):
             x, labels = batch
-            return self.model(x.to(self.device, non_blocking=True)), labels.to(self.device, non_blocking=True)
+            x      = x.to(self.device, non_blocking=True)
+            labels = labels.to(self.device, non_blocking=True)
+            # Multi-clip eval: x is (B, N, ...) — forward each clip, average logits
+            if x.ndim == 5 and self.modality == 'skeleton':   # (B, N, T, J, D)
+                B, N = x.shape[:2]
+                logits = self.model(x.flatten(0, 1)).view(B, N, -1).mean(dim=1)
+            elif x.ndim == 6 and self.modality == 'video':    # (B, N, C, T, H, W)
+                B, N = x.shape[:2]
+                logits = self.model(x.flatten(0, 1)).view(B, N, -1).mean(dim=1)
+            else:
+                logits = self.model(x)
+            return logits, labels
+
         # multimodal
         video, skeleton, labels = batch
-        return (
-            self.model(
-                video.to(self.device, non_blocking=True),
-                skeleton.to(self.device, non_blocking=True),
-            ),
-            labels.to(self.device, non_blocking=True),
-        )
+        video    = video.to(self.device, non_blocking=True)
+        skeleton = skeleton.to(self.device, non_blocking=True)
+        labels   = labels.to(self.device, non_blocking=True)
+        # Multi-clip eval: video (B, N, C, T, H, W), skeleton (B, N, T, J, D)
+        if video.ndim == 6:
+            B, N = video.shape[:2]
+            logits = self.model(video.flatten(0, 1), skeleton.flatten(0, 1)).view(B, N, -1).mean(dim=1)
+        else:
+            logits = self.model(video, skeleton)
+        return logits, labels
 
     def _run_epoch(self, loader, training: bool):
         self.model.train() if training else self.model.eval()
@@ -140,6 +158,7 @@ class Trainer:
         if self.skip_if_exists and os.path.exists(self.checkpoint_dir):
             if self.is_main:
                 print(f"Skipping {self.cfg['experiment']['name']} — checkpoint dir already exists.")
+            self._cleanup()
             return
 
         if self.is_main:
@@ -261,11 +280,10 @@ class Trainer:
         return results
 
     def _cleanup(self):
-        for attr in ('optimizer', 'scheduler'):
+        for attr in ('optimizer', 'scheduler', 'model', 'criterion'):
             if hasattr(self, attr):
                 delattr(self, attr)
-        del self.model, self.criterion
         torch.cuda.empty_cache()
         gc.collect()
-        if self.distributed:
+        if self.distributed and self._owns_pg and dist.is_initialized():
             dist.destroy_process_group()

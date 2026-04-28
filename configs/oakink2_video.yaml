@@ -1,25 +1,26 @@
 base: base.yaml
 
 experiment:
-  name: oakink2_video_tiny
+  name: oakink2_video
   modality: video
 
 dataset:
   name: oakink2
-  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_train.txt
-  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_val.txt
-  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/label_split/action_test.txt
-  frames_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2/scenes
+  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_train.txt
+  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_val.txt
+  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_test.txt
+  frames_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/scenes
 
-  num_classes: 306
+  num_classes: 262    # 306 original minus 44 'hold' classes
   clip_len: 8
   with_jitter: true
+  num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
   max_train_samples: null
-  min_class_samples: null   # e.g. 5 — drops classes with fewer total segments
+  min_class_samples: null
 
 model:
-  size: tiny        # tiny | small | medium
-  pretrained: false
+  size: tiny      # overridden by sweep
+  pretrained: true
   pretrained_path: null   # null = auto-resolve from pretrained_dir
 
 training:

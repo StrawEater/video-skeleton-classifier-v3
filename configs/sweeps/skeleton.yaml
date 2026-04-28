@@ -1,0 +1,13 @@
+# Skeleton-only sweep: tiny and small (pretrained) on OakInkV2_jpeg 262 classes.
+# Produces 2 experiments:
+#   oakink2_skeleton__tiny
+#   oakink2_skeleton__small
+#
+# Usage: python train.py configs/sweeps/skeleton.yaml
+
+sweep:
+  base: configs/oakink2_skeleton.yaml
+  grid:
+    model.size:
+      tiny:  tiny
+      small: small
