@@ -319,6 +319,7 @@ def build_loaders(cfg, rank=0, world_size=1):
     modality = cfg['experiment']['modality']
     num_workers = t.get('num_workers', 8)
     distributed = world_size > 1
+    persistent = num_workers > 0  # keep workers alive across epochs to avoid fork/CUDA deadlocks
 
     batch_size = t.get('batch_size') or _default_batch_size(modality, clip_len)
 
@@ -340,22 +341,27 @@ def build_loaders(cfg, rank=0, world_size=1):
             replacement=True, generator=generator,
         )
         train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,
-                                  num_workers=num_workers, pin_memory=True)
+                                  num_workers=num_workers, pin_memory=True,
+                                  persistent_workers=persistent)
     elif distributed:
         train_sampler = DistributedSampler(train_ds, num_replicas=world_size, rank=rank, shuffle=True)
         train_loader  = DataLoader(train_ds, batch_size=batch_size, sampler=train_sampler,
-                                   num_workers=num_workers, pin_memory=True)
+                                   num_workers=num_workers, pin_memory=True,
+                                   persistent_workers=persistent)
     else:
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                                  num_workers=num_workers, pin_memory=True)
+                                  num_workers=num_workers, pin_memory=True,
+                                  persistent_workers=persistent)
 
     if distributed:
         val_sampler = DistributedSampler(val_ds, num_replicas=world_size, rank=rank, shuffle=False)
         val_loader  = DataLoader(val_ds, batch_size=batch_size, sampler=val_sampler,
-                                 num_workers=num_workers, pin_memory=True)
+                                 num_workers=num_workers, pin_memory=True,
+                                 persistent_workers=persistent)
     else:
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                                num_workers=num_workers, pin_memory=True)
+                                num_workers=num_workers, pin_memory=True,
+                                persistent_workers=persistent)
 
     return train_loader, val_loader
 
@@ -367,6 +373,7 @@ def build_test_loader(cfg, rank=0, world_size=1):
     clip_len = d['clip_len']
     modality = cfg['experiment']['modality']
     num_workers = t.get('num_workers', 8)
+    persistent = num_workers > 0
 
     batch_size = t.get('batch_size') or _default_batch_size(modality, clip_len)
     test_ds = build_dataset(cfg, 'test')
@@ -374,9 +381,11 @@ def build_test_loader(cfg, rank=0, world_size=1):
     if world_size > 1:
         sampler = DistributedSampler(test_ds, num_replicas=world_size, rank=rank, shuffle=False)
         return DataLoader(test_ds, batch_size=batch_size, sampler=sampler,
-                          num_workers=num_workers, pin_memory=True)
+                          num_workers=num_workers, pin_memory=True,
+                          persistent_workers=persistent)
     return DataLoader(test_ds, batch_size=batch_size, shuffle=False,
-                      num_workers=num_workers, pin_memory=True)
+                      num_workers=num_workers, pin_memory=True,
+                      persistent_workers=persistent)
 
 
 def _default_batch_size(modality, clip_len):
