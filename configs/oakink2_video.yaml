@@ -11,12 +11,12 @@ dataset:
   test_split:  /root/DATA/OakInkV2_jpeg/label_split/action_test.txt
   frames_root: /root/DATA/OakInkV2_jpeg/scenes
 
-  num_classes: 262    # 306 original minus 44 'hold' classes
+  num_classes: 22     # classes with >= 25 segments in the full dataset
   clip_len: 8
   with_jitter: true
   num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
   max_train_samples: null
-  min_class_samples: null
+  min_class_samples: 25
 
 model:
   size: tiny      # overridden by sweep
