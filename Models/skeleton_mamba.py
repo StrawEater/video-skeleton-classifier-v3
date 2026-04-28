@@ -44,6 +44,24 @@ class MambaBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Reconstruction head
+# ---------------------------------------------------------------------------
+
+class MambaReconHead(nn.Module):
+    """Per-token MLP: embed_dim → embed_dim//2 → joint_dim (3)."""
+    def __init__(self, embed_dim, joint_dim=3):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim // 2),
+            nn.GELU(),
+            nn.Linear(embed_dim // 2, joint_dim),
+        )
+
+    def forward(self, x):  # x: (B, T, J, embed_dim)
+        return self.mlp(x)  # (B, T, J, joint_dim)
+
+
+# ---------------------------------------------------------------------------
 # Core model
 # ---------------------------------------------------------------------------
 
@@ -65,6 +83,7 @@ class SkeletonMamba(nn.Module):
         residual_in_fp32=True,
         num_frames=8,
         return_features_only=False,
+        with_reconstruction=False,
         **kwargs,  # absorb unused args (ssm_cfg, bimamba, etc.) for compat
     ):
         super().__init__()
@@ -87,6 +106,7 @@ class SkeletonMamba(nn.Module):
 
         self.norm_f = RMSNorm(embed_dim) if rms_norm else nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.recon_head = MambaReconHead(embed_dim, joint_dim) if with_reconstruction else None
 
         self._init_weights()
 
@@ -146,11 +166,23 @@ class SkeletonMamba(nn.Module):
             return hidden_states  # (B, 1+T*J, embed_dim)
         return hidden_states[:, 0, :]  # CLS token: (B, embed_dim)
 
-    def forward(self, x, inference_params=None):
-        features = self.forward_features(x)
+    def forward(self, x, return_recon=False, inference_params=None):
+        need_all = return_recon or self.return_features_only
+        features = self.forward_features(x, is_embedding=need_all)
+
         if self.return_features_only:
-            return features
-        return self.head(features)
+            return features  # (B, 1+T*J, embed_dim)
+
+        cls_feat = features[:, 0, :] if features.ndim == 3 else features
+        logits = self.head(cls_feat)
+
+        if return_recon and self.recon_head is not None:
+            B = x.shape[0]
+            body = features[:, 1:, :].reshape(B, self.num_frames, self.num_joints, self.embed_dim)
+            recon = self.recon_head(body)  # (B, T, J, 3)
+            return logits, recon
+
+        return logits
 
 
 # ---------------------------------------------------------------------------

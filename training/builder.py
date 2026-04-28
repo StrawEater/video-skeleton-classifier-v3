@@ -91,7 +91,10 @@ def build_model(cfg, load_pretrained=True):
             'small': skeleton_mamba_small,
             'medium': skeleton_mamba_medium,
         }
-        model = _sk_factory[size](num_joints=num_joints, num_frames=clip_len, num_classes=num_classes)
+        t = cfg['training']
+        with_recon = t.get('mask_ratio', 0.0) > 0
+        model = _sk_factory[size](num_joints=num_joints, num_frames=clip_len, num_classes=num_classes,
+                                  with_reconstruction=with_recon)
         if load_pretrained and m.get('pretrained', False):
             path = _pretrained_path(_SKELETON_WEIGHTS, size, clip_len, pretrained_dir, m.get('pretrained_path'))
             state = torch.load(path, map_location='cpu')
