@@ -156,48 +156,19 @@ class MultimodalActionMamba(nn.Module):
         Returns:
             logits: (B, num_classes) action predictions
         """
-        # Extract video features
-        video_features = self.video_encoder.forward_features(video_input, is_embedding=True)  # (B, T*H*W, embed_dim)
-        
-        # Extract skeleton features
-        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input, is_embedding=True)  # (B, T*num_joints, embed_dim)
-        
-        # Fuse and classify
-        logits = self.fusion_head(video_features, skeleton_features)  # (B, num_classes)
-        
-        return logits
+        video_features    = self.video_encoder.forward_features(video_input)     # (B, embed_dim)
+        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input) # (B, embed_dim)
+        return self.fusion_head(video_features, skeleton_features)
 
     def forward_video_only(self, video_input):
-        """
-        Forward pass using only video input.
-        
-        Args:
-            video_input: (B, C, T, H, W) video frames
-            
-        Returns:
-            logits: (B, num_classes)
-        """
-        video_features = self.video_encoder.forward_features(video_input, is_embedding=True)
-        # Use zero skeleton features
-        zero_skeleton = torch.zeros_like(video_features)
-        logits = self.fusion_head(video_features, zero_skeleton)
-        return logits
+        video_features = self.video_encoder.forward_features(video_input)  # (B, embed_dim)
+        zero_skeleton  = torch.zeros_like(video_features)
+        return self.fusion_head(video_features, zero_skeleton)
 
     def forward_skeleton_only(self, skeleton_input):
-        """
-        Forward pass using only skeleton input.
-        
-        Args:
-            skeleton_input: (B, T, num_joints, joint_dim) skeleton coordinates
-            
-        Returns:
-            logits: (B, num_classes)
-        """
-        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input, is_embedding=True)
-        # Use zero video features
-        zero_video = torch.zeros_like(skeleton_features)
-        logits = self.fusion_head(zero_video, skeleton_features)
-        return logits
+        skeleton_features = self.skeleton_encoder.forward_features(skeleton_input)  # (B, embed_dim)
+        zero_video        = torch.zeros_like(skeleton_features)
+        return self.fusion_head(zero_video, skeleton_features)
 
     def extract_video_features(self, video_input):
         """Extract video features without classification"""
