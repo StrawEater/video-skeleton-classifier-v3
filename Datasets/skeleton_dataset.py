@@ -56,8 +56,11 @@ class H2OSkeletonDataset(Dataset):
 
     def __len__(self):
         return len(self.df)
-    
-    
+
+    @property
+    def labels(self):
+        return (self.df['action_label'] - 1).tolist()  # 0-indexed, matches __getitem__
+
     def _load_txt_skeleton(self, skeleton_dir, frame_idx):
         
         """

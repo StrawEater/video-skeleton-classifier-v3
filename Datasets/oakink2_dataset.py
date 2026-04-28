@@ -58,6 +58,10 @@ class OakInkSkeletonDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
+    @property
+    def labels(self):
+        return self.df['label_id'].tolist()
+
     def _load_keypoints(self, scene_id):
         if scene_id not in self._kp_cache:
             path = os.path.join(self.keypoints_root, f"{scene_id}.npy")
@@ -170,6 +174,10 @@ class OakInkVideoDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
+    @property
+    def labels(self):
+        return self.df['label_id'].tolist()
+
     def _load_frame(self, scene_id, t):
         # t is the video timestep (0-indexed); frame name = 4*t+1 (1-indexed original frame)
         # Fall back to the last available frame if this one is missing
@@ -263,6 +271,10 @@ class MultimodalOakInkDataset(Dataset):
 
     def __len__(self):
         return len(self.df)
+
+    @property
+    def labels(self):
+        return self.df['label_id'].tolist()
 
     def __getitem__(self, index):
         row = self.df.iloc[index]
