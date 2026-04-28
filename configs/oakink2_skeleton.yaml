@@ -5,16 +5,16 @@ experiment:
   modality: skeleton
 
 dataset:
-  oversample_factor: 2   # draw 2x len(train_set) samples per epoch via weighted sampler
+  oversample_factor: 50   # draw 2x len(train_set) samples per epoch via weighted sampler
 
 model:
   size: tiny      # overridden by sweep
-  pretrained: false
+  pretrained: true
   pretrained_path: null   # null = auto-resolve from pretrained_dir
 
 training:
   total_epochs: 80
-  learning_rate: 2.0e-3
+  learning_rate: 2.0e-4
   weight_decay: 0.05
   batch_size: 128
   mask_ratio: 0.5        # fraction of spatiotemporal segments to mask
