@@ -5,7 +5,10 @@ from functools import partial
 from torch import Tensor
 from typing import Optional
 import torch.utils.checkpoint as checkpoint
-from VideoMamba.videomamba.video_sm.models.videomamba import videomamba_middle, videomamba_small, videomamba_tiny
+from VideoMamba.videomamba.video_sm.models.videomamba import (
+    videomamba_middle, videomamba_small, videomamba_tiny,
+    load_state_dict as vm_load_state_dict,
+)
 from .skeleton_mamba import skeleton_mamba_tiny, skeleton_mamba_small, skeleton_mamba_medium
 from .multimodal_fusion_mamba import MultimodalMambaFusion
 
@@ -90,30 +93,17 @@ class MultimodalActionMamba(nn.Module):
         self.num_joints = num_joints
         self.joint_dim = joint_dim
 
-        if video_model_size == 'tiny':
-            self.video_encoder = videomamba_tiny(
-                pretrained=video_pretrained,
-                pretrained_path=video_pretrained_path,
-                num_frames=num_frames,
-                num_classes=-1,  # Return features only
-            )
+        _vid_factory = {'tiny': videomamba_tiny, 'small': videomamba_small, 'medium': videomamba_middle}
+        self.video_encoder = _vid_factory.get(video_model_size, videomamba_middle)(
+            pretrained=False,
+            num_frames=num_frames,
+            num_classes=-1,
+        )
+        if video_pretrained and video_pretrained_path:
+            state = torch.load(video_pretrained_path, map_location='cpu')
+            vm_load_state_dict(self.video_encoder, state, center=True)
+            print(f"Loaded video weights: {video_pretrained_path}")
 
-        elif video_model_size == 'small':
-            self.video_encoder = videomamba_small(
-                pretrained=video_pretrained,
-                pretrained_path=video_pretrained_path,
-                num_frames=num_frames,
-                num_classes=-1,  # Return features only
-            )
-        else:
-            # Video encoder - VideoMamba middle model (embed_dim=576)
-            self.video_encoder = videomamba_middle(
-                pretrained=video_pretrained,
-                pretrained_path=video_pretrained_path,
-                num_frames=num_frames,
-                num_classes=-1,  # Return features only
-            )
-            
         self.video_encoder.head = nn.Identity()  # Remove classification head
 
         self.video_embed_dim = self.video_encoder.embed_dim # Use the embed_dim from the video encoder for consistency in fusion
