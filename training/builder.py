@@ -330,17 +330,6 @@ def build_loaders(cfg, rank=0, world_size=1):
                                    num_workers=num_workers, pin_memory=True)
         val_loader    = DataLoader(val_ds,   batch_size=batch_size, sampler=val_sampler,
                                    num_workers=num_workers, pin_memory=True)
-    elif d.get('weighted_sampling', False):
-        from torch.utils.data import WeightedRandomSampler
-        from collections import Counter
-        labels = train_ds.labels
-        counts = Counter(labels)
-        weights = [1.0 / counts[l] for l in labels]
-        sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-        train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler,
-                                  num_workers=num_workers, pin_memory=True)
-        val_loader   = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                                  num_workers=num_workers, pin_memory=True)
     else:
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                                   num_workers=num_workers, pin_memory=True)
