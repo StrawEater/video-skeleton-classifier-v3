@@ -4,6 +4,8 @@ experiment:
   name: oakink2_video
   modality: video
 
+<<<<<<< HEAD
+=======
 dataset:
   name: oakink2
   train_split: /root/DATA/OakInkV2_jpeg/label_split/action_train.txt
@@ -20,6 +22,7 @@ dataset:
   max_train_samples: null
   min_class_samples: 25
 
+>>>>>>> 2667df9204194351c32574b10908692be0ea9611
 model:
   size: tiny      # overridden by sweep
   pretrained: true
