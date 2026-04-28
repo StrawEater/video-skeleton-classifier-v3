@@ -67,6 +67,11 @@ class Trainer:
         self.skip_if_exists = t.get('skip_if_exists', True)
         self.t_max_mult = t.get('cosine_t_max_multiplier', 1.0)
 
+        # Masked reconstruction (skeleton only)
+        self.mask_ratio   = t.get('mask_ratio',   0.0)
+        self.mask_depth   = t.get('mask_depth',   4)
+        self.recon_weight = t.get('recon_weight', 10.0)
+
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -106,16 +111,65 @@ class Trainer:
             logits = self.model(video, skeleton)
         return logits, labels
 
+    def _make_skeleton_mask(self, x):
+        """
+        x: (B, T, J, D)
+        Returns float mask (B, T, J, 1) — 1=masked, 0=visible.
+        Masks non-overlapping (mask_depth frames) × (joint index) segments,
+        applied symmetrically to both hands.
+        """
+        B, T, J, _ = x.shape
+        half  = J // 2
+        depth = self.mask_depth
+        n_t   = T // depth          # temporal segments
+        n_seg = n_t * half          # total segments (time × joint-per-hand)
+        n_mask = max(1, int(self.mask_ratio * n_seg))
+
+        # Pick n_mask random segments per sample (vectorised)
+        selected = torch.rand(B, n_seg, device=x.device).argsort(dim=1)[:, :n_mask]  # (B, n_mask)
+        t_seg = selected // half    # temporal segment index
+        j_idx = selected % half     # joint index (one hand)
+
+        mask = torch.zeros(B, T, J, 1, device=x.device)
+        b_idx = torch.arange(B, device=x.device)[:, None]  # (B, 1)
+        for d in range(depth):
+            t_idx = (t_seg * depth + d).clamp(max=T - 1)
+            mask[b_idx, t_idx, j_idx,        0] = 1.0   # first hand
+            mask[b_idx, t_idx, j_idx + half, 0] = 1.0   # second hand (symmetric)
+
+        return mask
+
+    def _forward_recon(self, batch):
+        """Forward pass with masked reconstruction for skeleton training."""
+        x, labels = batch
+        x      = x.to(self.device, non_blocking=True)
+        labels = labels.to(self.device, non_blocking=True)
+        mask   = self._make_skeleton_mask(x)
+        logits, recon = self.model(x * (1.0 - mask), return_recon=True)
+        recon_loss = ((recon - x).abs() * mask).sum() / mask.sum().clamp(min=1)
+        return logits, labels, recon_loss
+
     def _run_epoch(self, loader, training: bool):
         self.model.train() if training else self.model.eval()
         total_loss = total_top1 = total_top5 = 0.0
         label = 'Train' if training else 'Val'
         pbar = tqdm(loader, desc=label, leave=False)
 
+        use_recon = (
+            training
+            and self.modality == 'skeleton'
+            and self.mask_ratio > 0
+            and getattr(self._raw_model, 'recon_head', None) is not None
+        )
+
         with torch.set_grad_enabled(training):
             for batch in pbar:
-                logits, labels = self._forward(batch)
-                loss = self.criterion(logits, labels)
+                if use_recon:
+                    logits, labels, recon_loss = self._forward_recon(batch)
+                    loss = self.criterion(logits, labels) + self.recon_weight * recon_loss
+                else:
+                    logits, labels = self._forward(batch)
+                    loss = self.criterion(logits, labels)
 
                 if training:
                     self.optimizer.zero_grad()

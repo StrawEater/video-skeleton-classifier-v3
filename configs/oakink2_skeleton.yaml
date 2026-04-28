@@ -17,4 +17,7 @@ training:
   learning_rate: 2.0e-3
   weight_decay: 0.05
   batch_size: 128
+  mask_ratio: 0.5        # fraction of spatiotemporal segments to mask
+  mask_depth: 4          # consecutive frames per temporal segment
+  recon_weight: 10.0     # weight of MAE reconstruction loss
 
