@@ -6,10 +6,10 @@ experiment:
 
 dataset:
   name: oakink2
-  train_split: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_train.txt
-  val_split:   /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_val.txt
-  test_split:  /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/label_split/action_test.txt
-  frames_root: /data/data3/junibg-ego/Proyectos/skeleton-video-classifier/DATA/OakInkV2_jpeg/scenes
+  train_split: /root/DATA/OakInkV2_jpeg/label_split/action_train.txt
+  val_split:   /root/DATA/OakInkV2_jpeg/label_split/action_val.txt
+  test_split:  /root/DATA/OakInkV2_jpeg/label_split/action_test.txt
+  frames_root: /root/DATA/OakInkV2_jpeg/scenes
 
   num_classes: 262    # 306 original minus 44 'hold' classes
   clip_len: 8
@@ -24,6 +24,6 @@ model:
   pretrained_path: null   # null = auto-resolve from pretrained_dir
 
 training:
-  total_epochs: 200
+  total_epochs: 80
   learning_rate: 2.0e-4
   weight_decay: 0.01

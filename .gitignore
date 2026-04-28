@@ -5,3 +5,5 @@ dataset_scripts
 old
 .vscode
 label_split
+pretrained/*
+pretrained_hands/*
