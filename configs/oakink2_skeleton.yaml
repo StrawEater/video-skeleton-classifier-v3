@@ -13,3 +13,5 @@ training:
   total_epochs: 80
   learning_rate: 2.0e-3
   weight_decay: 0.05
+  batch_size: 128
+
