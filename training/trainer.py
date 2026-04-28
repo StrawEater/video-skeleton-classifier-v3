@@ -20,21 +20,20 @@ class Trainer:
     Modality is determined by cfg['experiment']['modality'].
 
     Multi-GPU (DDP): launch with torchrun instead of python:
-        torchrun --nproc_per_node=2 train.py configs/oakink2_skeleton.yaml
-    Single-GPU: python train.py configs/oakink2_skeleton.yaml  (unchanged)
+        torchrun --nproc_per_node=2 train.py configs/sweeps/skeleton.yaml
+    Single-GPU: python train.py configs/sweeps/skeleton.yaml  (unchanged)
+
+    The process group is managed by train.py, not here. Trainer assumes
+    dist.init_process_group has already been called when running distributed.
     """
 
     def __init__(self, cfg, load_pretrained=True):
         self.cfg = cfg
         self.modality = cfg['experiment']['modality']
 
-        # --- Distributed setup (no-op when not launched with torchrun) ---
+        # --- Distributed setup (reads from already-initialized process group) ---
         self.distributed = int(os.environ.get('RANK', -1)) != -1
-        self._owns_pg = False  # whether this Trainer initialized the process group
         if self.distributed:
-            if not dist.is_initialized():
-                dist.init_process_group(backend='nccl')
-                self._owns_pg = True
             self.rank       = dist.get_rank()
             self.world_size = dist.get_world_size()
             self.local_rank = int(os.environ['LOCAL_RANK'])
@@ -182,45 +181,61 @@ class Trainer:
         patience_lr = patience_stop = 0
         last_ckpt = None
 
+        # decisions[0] = reduce_lr,  decisions[1] = stop
+        # Rank 0 sets these; all ranks receive them via broadcast so they act together.
+        decisions = torch.zeros(2, dtype=torch.int32,
+                                device=self.device if self.distributed else 'cpu')
+
         for epoch in range(self.total_epochs):
-            # Required so each epoch gets different data on each rank
             if self.distributed and hasattr(train_loader.sampler, 'set_epoch'):
                 train_loader.sampler.set_epoch(epoch)
 
             train_loss, train_top1, _ = self._run_epoch(train_loader, training=True)
             val_loss, val_top1, val_top5 = self._run_epoch(val_loader, training=False)
 
-            if not self.is_main:
-                continue
+            decisions.zero_()
 
-            ep = epoch + 1
-            lr = self.optimizer.param_groups[0]['lr']
-            print(f"[{ep:3d}/{self.total_epochs}] "
-                  f"train {train_top1:.1f}%  "
-                  f"val {val_top1:.1f}% (top5 {val_top5:.1f}%)  "
-                  f"lr {lr:.2e}")
+            if self.is_main:
+                ep = epoch + 1
+                lr = self.optimizer.param_groups[0]['lr']
+                print(f"[{ep:3d}/{self.total_epochs}] "
+                      f"train {train_top1:.1f}%  "
+                      f"val {val_top1:.1f}% (top5 {val_top5:.1f}%)  "
+                      f"lr {lr:.2e}")
 
-            if val_top1 > last_best:
-                if last_ckpt and os.path.exists(last_ckpt):
-                    os.remove(last_ckpt)
-                fname = f"epoch{ep:03d}_train{train_top1:.2f}_val{val_top1:.2f}.pth"
-                last_ckpt = os.path.join(self.checkpoint_dir, fname)
-                torch.save(self._raw_model.state_dict(), last_ckpt)
-                last_best = val_top1
-                patience_lr = patience_stop = 0
-                print(f"  -> saved {fname}")
-            else:
-                patience_lr += 1
-                patience_stop += 1
+                if val_top1 > last_best:
+                    if last_ckpt and os.path.exists(last_ckpt):
+                        os.remove(last_ckpt)
+                    fname = f"epoch{ep:03d}_train{train_top1:.2f}_val{val_top1:.2f}.pth"
+                    last_ckpt = os.path.join(self.checkpoint_dir, fname)
+                    torch.save(self._raw_model.state_dict(), last_ckpt)
+                    last_best = val_top1
+                    patience_lr = patience_stop = 0
+                    print(f"  -> saved {fname}")
+                else:
+                    patience_lr += 1
+                    patience_stop += 1
 
-            if patience_lr >= self.lr_patience:
+                if patience_lr >= self.lr_patience:
+                    decisions[0] = 1
+                    patience_lr = 0
+
+                if patience_stop >= self.stop_patience:
+                    decisions[1] = 1
+
+            # Broadcast rank-0 decisions so all ranks reduce LR / stop together.
+            if self.distributed:
+                dist.broadcast(decisions, src=0)
+
+            if decisions[0]:
                 for pg in self.optimizer.param_groups:
                     pg['lr'] *= self.lr_factor
-                print(f"  LR reduced to {self.optimizer.param_groups[0]['lr']:.2e}")
-                patience_lr = 0
+                if self.is_main:
+                    print(f"  LR reduced to {self.optimizer.param_groups[0]['lr']:.2e}")
 
-            if patience_stop >= self.stop_patience:
-                print(f"  Early stop at epoch {ep}.")
+            if decisions[1]:
+                if self.is_main:
+                    print(f"  Early stop at epoch {epoch + 1}.")
                 break
 
         if self.is_main:
@@ -285,5 +300,3 @@ class Trainer:
                 delattr(self, attr)
         torch.cuda.empty_cache()
         gc.collect()
-        if self.distributed and self._owns_pg and dist.is_initialized():
-            dist.destroy_process_group()
