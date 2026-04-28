@@ -111,8 +111,10 @@ def build_model(cfg, load_pretrained=True):
             num_frames=clip_len,
         )
         if load_pretrained and m.get('pretrained', False):
+            from VideoMamba.videomamba.video_sm.models.videomamba import load_state_dict as vm_load_state_dict
             path = _pretrained_path(_VIDEOMAMBA_WEIGHTS, size, clip_len, pretrained_dir, m.get('pretrained_path'))
-            model.load_pretrained(path)
+            state = torch.load(path, map_location='cpu')
+            vm_load_state_dict(model, state, center=True)
             print(f"Loaded video weights: {path}")
         return model
 
