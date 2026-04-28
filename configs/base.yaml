@@ -37,7 +37,7 @@ dataset:
   keypoints_root:       /root/DATA/OakInkV2_jpeg/hand_keypoints
   wrist_positions_root: /root/DATA/OakInkV2_jpeg/wrist_positions
 
-  num_classes: 31     # action-only classes with >= 25 segments in the full dataset
+  num_classes: 68     # action-only classes with >= 25 segments in the full dataset
   clip_len: 8
   num_joints: 21      # per hand; model receives num_joints * num_hands = 42
   num_hands: 2
@@ -46,5 +46,5 @@ dataset:
   num_eval_clips: 8           # clips sampled across the segment at eval time; logits are averaged
   action_only: true
   max_train_samples: null
-  min_class_samples: 25
+  min_class_samples: null
   weighted_sampling: true
